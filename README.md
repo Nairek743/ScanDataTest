@@ -14,7 +14,7 @@
             
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                resultDiv.innerHTML = '<p style="color:green">Камера доступна! ✅</p>';
+                resultDiv.innerHTML = '<p style="color:green">Камера доступна! </p>';
                 
                 // Покажем видео с камеры
                 const video = document.createElement('video');
