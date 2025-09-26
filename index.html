@@ -3,190 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Сканер штрих-кодов</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            text-align: center;
-        }
-        #status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-        }
-        .loading { background: #fff3cd; color: #856404; }
-        .success { background: #d4edda; color: #155724; }
-        .error { background: #f8d7da; color: #721c24; }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            margin: 10px;
-        }
-        #reader {
-            width: 100%;
-            max-width: 400px;
-            height: 300px;
-            border: 2px dashed #ccc;
-            margin: 20px auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #f9f9f9;
-        }
-    </style>
+    <title>Простой сканер</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 </head>
 <body>
-    <h1>Сканер штрих-кодов - Диагностика</h1>
-    
-    <div id="status" class="loading">Загрузка библиотеки...</div>
-    
-    <div id="reader">
-        Камера будет здесь
-    </div>
-    
-    <button onclick="startScanner()" id="scan-btn" disabled>Запустить сканер</button>
-    <button onclick="stopScanner()" id="stop-btn" disabled>Остановить</button>
-    
-    <div id="result"></div>
+    <h1>Простой тест сканера</h1>
+    <div id="reader" style="width: 100%; height: 400px; border: 2px solid red;"></div>
+    <button onclick="startSimpleTest()">Тест камеры</button>
+    <div id="log"></div>
 
-                    <script>
-let html5Qrcode = null;
-let isScanning = false;
-
-// ... остальной код загрузки библиотеки ...
-
-window.startScanner = async function() {
-    const statusDiv = document.getElementById('status');
-    const resultDiv = document.getElementById('result');
-    
-    if (isScanning) {
-        statusDiv.innerHTML = '⚠️ Сканер уже запущен';
-        return;
-    }
-    
-    try {
-        statusDiv.innerHTML = '🔄 Проверяем поддержку камеры...';
-        
-        // Сначала проверим доступ к камере
-        const cameras = await Html5Qrcode.getCameras();
-        console.log('Доступные камеры:', cameras);
-        
-        if (cameras.length === 0) {
-            throw new Error('Камеры не найдены на устройстве');
+    <script>
+        function log(message) {
+            document.getElementById('log').innerHTML += message + '<br>';
         }
-        
-        statusDiv.innerHTML = '🔄 Инициализируем сканер...';
-        
-        // Создаем экземпляр сканера
-        html5Qrcode = new Html5Qrcode("reader");
-        console.log('Сканер создан');
-        
-        statusDiv.innerHTML = '🔄 Запускаем камеру... Разрешите доступ';
-        
-        // Пробуем разные настройки
-        const config = { 
-            fps: 10, 
-            qrbox: { width: 250, height: 150 },
-            aspectRatio: 1.333334
-        };
-        
-        // Пробуем сначала заднюю камеру, потом любую доступную
-        let cameraId = null;
-        
-        // Ищем заднюю камеру
-        const rearCamera = cameras.find(cam => cam.label.toLowerCase().includes('back') || cam.label.includes('задн'));
-        if (rearCamera) {
-            cameraId = rearCamera.id;
-            console.log('Используем заднюю камеру:', rearCamera.label);
-        } else {
-            cameraId = cameras[0].id; // Первая доступная камера
-            console.log('Используем первую камеру:', cameras[0].label);
-        }
-        
-        // Запускаем сканер
-        await html5Qrcode.start(
-            cameraId, // Используем конкретную камеру
-            config,
-            function(decodedText, decodedResult) {
-                console.log('✅ Отсканировано:', decodedText);
-                resultDiv.innerHTML = `
-                    <div style="background: #d4edda; padding: 15px; border-radius: 5px;">
-                        <h3>✅ Штрих-код отсканирован!</h3>
-                        <p><strong>Код:</strong> ${decodedText}</p>
-                        <button onclick="testAgain()">Сканировать еще</button>
-                    </div>
-                `;
-                stopScanner();
-            },
-            function(error) {
-                // Игнорируем ошибки сканирования (но логируем)
-                console.log('Ошибка сканирования (нормально):', error);
+
+        async function startSimpleTest() {
+            try {
+                log('Пробуем запустить сканер...');
+                
+                const scanner = new Html5Qrcode("reader");
+                
+                await scanner.start(
+                    { facingMode: "user" }, // Фронтальная камера (обычно проще)
+                    { fps: 5, qrbox: 250 },
+                    (text) => {
+                        log('✅ Сканирование работает! Код: ' + text);
+                        scanner.stop();
+                    },
+                    (error) => {
+                        // Игнорируем ошибки сканирования
+                    }
+                );
+                
+                log('✅ Камера запущена!');
+                
+            } catch (error) {
+                log('❌ Ошибка: ' + (error.message || error));
+                log('Подробности: ' + JSON.stringify(error));
             }
-        );
-        
-        isScanning = true;
-        document.getElementById('scan-btn').disabled = true;
-        document.getElementById('stop-btn').disabled = false;
-        statusDiv.innerHTML = '✅ Сканер активен! Наведите на штрих-код';
-        statusDiv.style.background = '#d4edda';
-        
-    } catch (error) {
-        console.error('Полная ошибка:', error);
-        
-        let errorMessage = 'Неизвестная ошибка';
-        if (error && error.message) {
-            errorMessage = error.message;
-        } else if (typeof error === 'string') {
-            errorMessage = error;
         }
-        
-        statusDiv.className = 'error';
-        statusDiv.innerHTML = `
-            ❌ Ошибка: ${errorMessage}<br><br>
-            <small>Возможные причины:<br>
-            • Не разрешен доступ к камере<br>
-            • Камера используется другим приложением<br>
-            • Браузер не поддерживает сканирование<br>
-            • Страница открыта по HTTP (нужен HTTPS или localhost)</small>
-        `;
-        
-        // Дополнительная диагностика
-        resultDiv.innerHTML = `
-            <div style="text-align: left; background: #fff3cd; padding: 15px; border-radius: 5px;">
-                <h4>Диагностика:</h4>
-                <p><strong>User Agent:</strong> ${navigator.userAgent}</p>
-                <p><strong>HTTPS:</strong> ${window.location.protocol === 'https:' ? 'Да' : 'Нет'}</p>
-                <p><strong>Localhost:</strong> ${window.location.hostname === 'localhost' ? 'Да' : 'Нет'}</p>
-                <p><strong>MediaDevices:</strong> ${navigator.mediaDevices ? 'Доступно' : 'Недоступно'}</p>
-            </div>
-        `;
-    }
-};
-
-window.stopScanner = async function() {
-    if (html5Qrcode && isScanning) {
-        try {
-            await html5Qrcode.stop();
-            isScanning = false;
-            document.getElementById('scan-btn').disabled = false;
-            document.getElementById('stop-btn').disabled = true;
-            document.getElementById('status').innerHTML = '✅ Сканер остановлен';
-            document.getElementById('status').style.background = '';
-        } catch (error) {
-            console.error('Ошибка остановки:', error);
-        }
-    }
-};
-
-function testAgain() {
-    document.getElementById('result').innerHTML = '';
-    startScanner();
-}
-
-// ... остальной код ...
-</script>
+    </script>
 </body>
 </html>
