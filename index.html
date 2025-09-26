@@ -5,306 +5,113 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Сканер штрих-кодов 1С</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
         body {
             font-family: Arial, sans-serif;
-            max-width: 100%;
-            padding: 20px;
-            background: #f5f5f5;
-        }
-        .container {
             max-width: 500px;
             margin: 0 auto;
-            background: white;
             padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #333;
+            background: #f5f5f5;
         }
         #status {
             padding: 15px;
             margin: 15px 0;
             border-radius: 5px;
             text-align: center;
-            font-weight: bold;
         }
-        .loading { background: #fff3cd; color: #856404; }
         .success { background: #d4edda; color: #155724; }
         .error { background: #f8d7da; color: #721c24; }
-        .info { background: #d1ecf1; color: #0c5460; }
-        
-        #reader {
-            width: 100%;
-            height: 300px;
-            border: 3px dashed #ddd;
-            margin: 20px 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #f9f9f9;
-            border-radius: 5px;
-        }
-        .buttons {
-            display: flex;
-            gap: 10px;
-            margin: 20px 0;
-        }
-        button {
-            flex: 1;
-            padding: 15px;
-            font-size: 16px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        #scan-btn {
-            background: #28a745;
-            color: white;
-        }
-        #scan-btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-        }
-        #stop-btn {
-            background: #dc3545;
-            color: white;
-        }
-        #stop-btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-        }
-        #manual-section {
-            margin: 20px 0;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 5px;
-        }
-        #manual-barcode {
-            width: 100%;
-            padding: 12px;
-            font-size: 16px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        #result {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 5px;
-            min-height: 100px;
-        }
+        button { padding: 15px; font-size: 16px; margin: 10px; width: 100%; }
+        #reader { width: 100%; height: 300px; border: 2px dashed #ccc; margin: 20px 0; }
     </style>
     
-    <!-- ЛОКАЛЬНАЯ библиотека -->
-    <script src="html5-qrcode.min.js"></script>
+    <!-- Используем CDN с HTTPS -->
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>📷 Сканер штрих-кодов</h1>
-        
-        <div id="status" class="info">Загрузка системы...</div>
-        
-        <div id="reader">
-            <div style="text-align: center; color: #666;">
-                <div style="font-size: 48px;">📷</div>
-                <div>Область сканирования</div>
-            </div>
-        </div>
-        
-        <div class="buttons">
-            <button id="scan-btn" onclick="startScanner()">Запустить сканер</button>
-            <button id="stop-btn" onclick="stopScanner()" disabled>Остановить</button>
-        </div>
-        
-        <div id="manual-section">
-            <h3>Или введите код вручную:</h3>
-            <input type="text" id="manual-barcode" placeholder="Введите штрих-код">
-            <button onclick="searchByManualInput()" style="width: 100%; background: #007bff; color: white;">Найти</button>
-        </div>
-        
-        <div id="result">
-            <div style="text-align: center; color: #666;">
-                Здесь будет результат сканирования
-            </div>
-        </div>
-    </div>
+    <h1>Сканер штрих-кодов</h1>
+    
+    <div id="status">Загрузка...</div>
+    <div id="reader"></div>
+    
+    <button onclick="startScanner()" id="scan-btn">Запустить сканер</button>
+    <button onclick="stopScanner()" id="stop-btn" disabled>Остановить</button>
+    
+    <div id="result"></div>
 
     <script>
-        // Глобальные переменные
+        // Ждем загрузки библиотеки
+        function waitForLibrary(callback) {
+            let attempts = 0;
+            const maxAttempts = 50; // 5 секунд
+            
+            function check() {
+                attempts++;
+                if (typeof Html5Qrcode !== 'undefined') {
+                    callback(true);
+                } else if (attempts < maxAttempts) {
+                    setTimeout(check, 100);
+                } else {
+                    callback(false);
+                }
+            }
+            check();
+        }
+        
+        waitForLibrary(function(success) {
+            const statusDiv = document.getElementById('status');
+            if (success) {
+                statusDiv.className = 'success';
+                statusDiv.innerHTML = '✅ Система готова!';
+                document.getElementById('scan-btn').disabled = false;
+            } else {
+                statusDiv.className = 'error';
+                statusDiv.innerHTML = '❌ Библиотека не загрузилась';
+            }
+        });
+        
         let html5Qrcode = null;
         let isScanning = false;
         
-        // Проверка загрузки библиотеки
-        function checkLibraryLoaded() {
-            const statusDiv = document.getElementById('status');
-            
-            if (typeof Html5Qrcode === 'undefined') {
-                statusDiv.className = 'error';
-                statusDiv.innerHTML = '❌ Библиотека не загружена. Убедитесь, что файл "html5-qrcode.min.js" находится в той же папке.';
-                return false;
-            }
-            
-            statusDiv.className = 'success';
-            statusDiv.innerHTML = '✅ Система готова к работе!';
-            document.getElementById('scan-btn').disabled = false;
-            return true;
-        }
-        
-        // Запуск сканера
         window.startScanner = async function() {
-            if (!checkLibraryLoaded()) return;
-            
             const statusDiv = document.getElementById('status');
-            const scanBtn = document.getElementById('scan-btn');
-            const stopBtn = document.getElementById('stop-btn');
-            const resultDiv = document.getElementById('result');
-            
-            if (isScanning) {
-                statusDiv.innerHTML = '⚠️ Сканер уже запущен';
-                return;
-            }
             
             try {
-                statusDiv.className = 'loading';
                 statusDiv.innerHTML = '🔄 Запускаем камеру...';
                 
-                // Создаем экземпляр сканера
                 html5Qrcode = new Html5Qrcode("reader");
                 
-                // Конфигурация
-                const config = {
-                    fps: 10,
-                    qrbox: { width: 250, height: 150 },
-                    aspectRatio: 1.0
-                };
-                
-                // Запускаем сканер
                 await html5Qrcode.start(
-                    { facingMode: "environment" }, // Задняя камера
-                    config,
-                    // Функция успешного сканирования
-                    function(decodedText, decodedResult) {
-                        resultDiv.innerHTML = `
-                            <div style="background: #d4edda; padding: 20px; border-radius: 5px;">
-                                <h3 style="color: #155724;">✅ Штрих-код отсканирован!</h3>
-                                <p><strong>Код:</strong> ${decodedText}</p>
-                                <p><strong>Время:</strong> ${new Date().toLocaleTimeString()}</p>
-                                <button onclick="processBarcode('${decodedText}')" 
-                                        style="background: #28a745; color: white; padding: 10px; border: none; border-radius: 5px; margin-top: 10px;">
-                                    Получить данные из 1С
-                                </button>
-                            </div>
-                        `;
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: 250 },
+                    function(decodedText) {
+                        document.getElementById('result').innerHTML = 
+                            `<div style="background: #d4edda; padding: 15px;">
+                                <h3>✅ Успех!</h3>
+                                <p>Штрих-код: ${decodedText}</p>
+                             </div>`;
                         stopScanner();
                     },
-                    // Функция ошибок сканирования (игнорируем)
-                    function(error) {
-                        // console.log('Ошибка сканирования:', error);
-                    }
+                    function() {} // Игнорируем ошибки сканирования
                 );
                 
                 isScanning = true;
-                scanBtn.disabled = true;
-                stopBtn.disabled = false;
-                statusDiv.className = 'success';
-                statusDiv.innerHTML = '✅ Сканер активен! Наведите камеру на штрих-код';
+                document.getElementById('scan-btn').disabled = true;
+                document.getElementById('stop-btn').disabled = false;
+                statusDiv.innerHTML = '✅ Сканер активен';
                 
             } catch (error) {
-                console.error('Ошибка:', error);
-                statusDiv.className = 'error';
-                statusDiv.innerHTML = `❌ Ошибка: ${error.message || 'Неизвестная ошибка'}`;
-                
-                // Диагностика
-                resultDiv.innerHTML = `
-                    <div style="background: #fff3cd; padding: 15px; border-radius: 5px;">
-                        <h4>Диагностика:</h4>
-                        <p><strong>Протокол:</strong> ${location.protocol}</p>
-                        <p><strong>Хост:</strong> ${location.hostname}</p>
-                        <p><strong>Камера:</strong> ${navigator.mediaDevices ? 'Доступна' : 'Недоступна'}</p>
-                        <p><strong>Ошибка:</strong> ${error.message || JSON.stringify(error)}</p>
-                    </div>
-                `;
+                statusDiv.innerHTML = `❌ Ошибка: ${error.message}`;
             }
         };
         
-        // Остановка сканера
         window.stopScanner = async function() {
             if (html5Qrcode && isScanning) {
-                try {
-                    await html5Qrcode.stop();
-                    isScanning = false;
-                    document.getElementById('scan-btn').disabled = false;
-                    document.getElementById('stop-btn').disabled = true;
-                    document.getElementById('status').className = 'info';
-                    document.getElementById('status').innerHTML = '⏸️ Сканер остановлен';
-                } catch (error) {
-                    console.error('Ошибка остановки:', error);
-                }
+                await html5Qrcode.stop();
+                isScanning = false;
+                document.getElementById('scan-btn').disabled = false;
+                document.getElementById('stop-btn').disabled = true;
             }
         };
-        
-        // Обработка штрих-кода
-        window.processBarcode = function(barcode) {
-            const resultDiv = document.getElementById('result');
-            resultDiv.innerHTML = `
-                <div style="background: #fff3cd; padding: 20px; border-radius: 5px;">
-                    <h3>🔍 Поиск товара...</h3>
-                    <p><strong>Штрих-код:</strong> ${barcode}</p>
-                    <p>Ищем в базе 1С...</p>
-                </div>
-            `;
-            
-            // Имитация запроса к 1С
-            setTimeout(() => {
-                resultDiv.innerHTML = `
-                    <div style="background: #d4edda; padding: 20px; border-radius: 5px;">
-                        <h3>✅ Товар найден в 1С!</h3>
-                        <p><strong>Штрих-код:</strong> ${barcode}</p>
-                        <p><strong>Наименование:</strong> Тестовый товар №${barcode}</p>
-                        <p><strong>Артикул:</strong> TEST-${barcode.substring(0, 6)}</p>
-                        <p><strong>Остаток:</strong> ${Math.floor(Math.random() * 100)} шт.</p>
-                        <p><strong>Цена:</strong> ${Math.floor(Math.random() * 1000) + 100} руб.</p>
-                        <button onclick="startScanner()" style="background: #007bff; color: white; padding: 10px; border: none; border-radius: 5px; margin-top: 10px;">
-                            Сканировать еще
-                        </button>
-                    </div>
-                `;
-            }, 2000);
-        };
-        
-        // Ручной ввод
-        window.searchByManualInput = function() {
-            const barcode = document.getElementById('manual-barcode').value.trim();
-            if (barcode) {
-                if (isScanning) {
-                    stopScanner();
-                }
-                processBarcode(barcode);
-            } else {
-                alert('Введите штрих-код');
-            }
-        };
-        
-        // Enter в поле ввода
-        document.getElementById('manual-barcode').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                searchByManualInput();
-            }
-        });
-        
-        // Проверяем загрузку библиотеки
-        window.addEventListener('load', function() {
-            setTimeout(checkLibraryLoaded, 100);
-        });
     </script>
 </body>
 </html>
