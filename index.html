@@ -52,113 +52,141 @@
     
     <div id="result"></div>
 
-    <script>
-        let html5Qrcode = null;
-        let isScanning = false;
+                    <script>
+let html5Qrcode = null;
+let isScanning = false;
+
+// ... остальной код загрузки библиотеки ...
+
+window.startScanner = async function() {
+    const statusDiv = document.getElementById('status');
+    const resultDiv = document.getElementById('result');
+    
+    if (isScanning) {
+        statusDiv.innerHTML = '⚠️ Сканер уже запущен';
+        return;
+    }
+    
+    try {
+        statusDiv.innerHTML = '🔄 Проверяем поддержку камеры...';
         
-        // Функция для загрузки библиотеки с нескольких CDN
-        function loadScannerLibrary() {
-            const statusDiv = document.getElementById('status');
-            
-            // Пробуем разные CDN
-            const cdnUrls = [
-                'https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js',
-                'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js',
-                'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js'
-            ];
-            
-            function tryLoad(index) {
-                if (index >= cdnUrls.length) {
-                    statusDiv.className = 'error';
-                    statusDiv.innerHTML = '❌ Все CDN недоступны. Проверьте интернет.';
-                    return;
-                }
-                
-                statusDiv.innerHTML = `Пробуем загрузить с: ${cdnUrls[index].split('/')[2]}`;
-                
-                const script = document.createElement('script');
-                script.src = cdnUrls[index];
-                script.onload = function() {
-                    statusDiv.className = 'success';
-                    statusDiv.innerHTML = '✅ Библиотека загружена!';
-                    initializeScanner();
-                };
-                script.onerror = function() {
-                    console.log(`CDN ${index + 1} не сработал`);
-                    tryLoad(index + 1);
-                };
-                
-                document.head.appendChild(script);
-            }
-            
-            tryLoad(0);
+        // Сначала проверим доступ к камере
+        const cameras = await Html5Qrcode.getCameras();
+        console.log('Доступные камеры:', cameras);
+        
+        if (cameras.length === 0) {
+            throw new Error('Камеры не найдены на устройстве');
         }
         
-        function initializeScanner() {
-            if (typeof Html5Qrcode === 'undefined') {
-                document.getElementById('status').innerHTML = '❌ Библиотека не загрузилась';
-                return;
+        statusDiv.innerHTML = '🔄 Инициализируем сканер...';
+        
+        // Создаем экземпляр сканера
+        html5Qrcode = new Html5Qrcode("reader");
+        console.log('Сканер создан');
+        
+        statusDiv.innerHTML = '🔄 Запускаем камеру... Разрешите доступ';
+        
+        // Пробуем разные настройки
+        const config = { 
+            fps: 10, 
+            qrbox: { width: 250, height: 150 },
+            aspectRatio: 1.333334
+        };
+        
+        // Пробуем сначала заднюю камеру, потом любую доступную
+        let cameraId = null;
+        
+        // Ищем заднюю камеру
+        const rearCamera = cameras.find(cam => cam.label.toLowerCase().includes('back') || cam.label.includes('задн'));
+        if (rearCamera) {
+            cameraId = rearCamera.id;
+            console.log('Используем заднюю камеру:', rearCamera.label);
+        } else {
+            cameraId = cameras[0].id; // Первая доступная камера
+            console.log('Используем первую камеру:', cameras[0].label);
+        }
+        
+        // Запускаем сканер
+        await html5Qrcode.start(
+            cameraId, // Используем конкретную камеру
+            config,
+            function(decodedText, decodedResult) {
+                console.log('✅ Отсканировано:', decodedText);
+                resultDiv.innerHTML = `
+                    <div style="background: #d4edda; padding: 15px; border-radius: 5px;">
+                        <h3>✅ Штрих-код отсканирован!</h3>
+                        <p><strong>Код:</strong> ${decodedText}</p>
+                        <button onclick="testAgain()">Сканировать еще</button>
+                    </div>
+                `;
+                stopScanner();
+            },
+            function(error) {
+                // Игнорируем ошибки сканирования (но логируем)
+                console.log('Ошибка сканирования (нормально):', error);
             }
-            
+        );
+        
+        isScanning = true;
+        document.getElementById('scan-btn').disabled = true;
+        document.getElementById('stop-btn').disabled = false;
+        statusDiv.innerHTML = '✅ Сканер активен! Наведите на штрих-код';
+        statusDiv.style.background = '#d4edda';
+        
+    } catch (error) {
+        console.error('Полная ошибка:', error);
+        
+        let errorMessage = 'Неизвестная ошибка';
+        if (error && error.message) {
+            errorMessage = error.message;
+        } else if (typeof error === 'string') {
+            errorMessage = error;
+        }
+        
+        statusDiv.className = 'error';
+        statusDiv.innerHTML = `
+            ❌ Ошибка: ${errorMessage}<br><br>
+            <small>Возможные причины:<br>
+            • Не разрешен доступ к камере<br>
+            • Камера используется другим приложением<br>
+            • Браузер не поддерживает сканирование<br>
+            • Страница открыта по HTTP (нужен HTTPS или localhost)</small>
+        `;
+        
+        // Дополнительная диагностика
+        resultDiv.innerHTML = `
+            <div style="text-align: left; background: #fff3cd; padding: 15px; border-radius: 5px;">
+                <h4>Диагностика:</h4>
+                <p><strong>User Agent:</strong> ${navigator.userAgent}</p>
+                <p><strong>HTTPS:</strong> ${window.location.protocol === 'https:' ? 'Да' : 'Нет'}</p>
+                <p><strong>Localhost:</strong> ${window.location.hostname === 'localhost' ? 'Да' : 'Нет'}</p>
+                <p><strong>MediaDevices:</strong> ${navigator.mediaDevices ? 'Доступно' : 'Недоступно'}</p>
+            </div>
+        `;
+    }
+};
+
+window.stopScanner = async function() {
+    if (html5Qrcode && isScanning) {
+        try {
+            await html5Qrcode.stop();
+            isScanning = false;
             document.getElementById('scan-btn').disabled = false;
-            document.getElementById('status').innerHTML = '✅ Система готова. Нажмите "Запустить сканер"';
+            document.getElementById('stop-btn').disabled = true;
+            document.getElementById('status').innerHTML = '✅ Сканер остановлен';
+            document.getElementById('status').style.background = '';
+        } catch (error) {
+            console.error('Ошибка остановки:', error);
         }
-        
-        window.startScanner = async function() {
-            const statusDiv = document.getElementById('status');
-            const resultDiv = document.getElementById('result');
-            
-            if (isScanning) return;
-            
-            try {
-                statusDiv.innerHTML = '🔄 Запускаем камеру...';
-                
-                html5Qrcode = new Html5Qrcode("reader");
-                
-                await html5Qrcode.start(
-                    { facingMode: "environment" },
-                    { 
-                        fps: 10, 
-                        qrbox: { width: 250, height: 150 } 
-                    },
-                    function(decodedText, decodedResult) {
-                        // Успешное сканирование
-                        resultDiv.innerHTML = `<p>Отсканировано: <strong>${decodedText}</strong></p>`;
-                        stopScanner();
-                    },
-                    function(error) {
-                        // Ошибки сканирования (игнорируем)
-                    }
-                );
-                
-                isScanning = true;
-                document.getElementById('scan-btn').disabled = true;
-                document.getElementById('stop-btn').disabled = false;
-                statusDiv.innerHTML = '✅ Сканер активен. Наведите на штрих-код';
-                
-            } catch (error) {
-                statusDiv.className = 'error';
-                statusDiv.innerHTML = `❌ Ошибка: ${error.message}`;
-            }
-        };
-        
-        window.stopScanner = async function() {
-            if (html5Qrcode && isScanning) {
-                try {
-                    await html5Qrcode.stop();
-                    html5Qrcode.clear();
-                    isScanning = false;
-                    document.getElementById('scan-btn').disabled = false;
-                    document.getElementById('stop-btn').disabled = true;
-                    document.getElementById('status').innerHTML = '✅ Сканер остановлен';
-                } catch (error) {
-                    console.error('Ошибка остановки:', error);
-                }
-            }
-        };
-        
-        // Загружаем библиотеку при старте
-        loadScannerLibrary();
-    </script>
+    }
+};
+
+function testAgain() {
+    document.getElementById('result').innerHTML = '';
+    startScanner();
+}
+
+// ... остальной код ...
+</script>
 </body>
 </html>
