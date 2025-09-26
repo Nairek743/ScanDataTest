@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Сканер штрих-кодов 1С</title>
     <style>
+        /* Ваши стили остаются без изменений */
         body {
             font-family: sans-serif;
             max-width: 800px;
@@ -18,7 +19,7 @@
             margin: 20px auto;
             position: relative;
         }
-        #interactive.viewport {
+        #reader {
             width: 100%;
             height: 300px;
             border: 1px solid #ccc;
@@ -49,8 +50,9 @@
             color: #856404;
         }
     </style>
-    <!-- Подключаем библиотеку для сканирования -->
-    <script type="text/javascript" src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
+    
+    <!-- Подключаем библиотеку ОБЯЗАТЕЛЬНО в head -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 </head>
 <body>
     <h1>Сканер штрих-кодов</h1>
